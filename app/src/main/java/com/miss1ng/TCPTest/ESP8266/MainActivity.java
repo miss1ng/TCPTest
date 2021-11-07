@@ -13,10 +13,12 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.text.method.ScrollingMovementMethod;
 import android.widget.Toast;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.io.ByteArrayOutputStream;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -40,23 +42,26 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    /**
-     * 16进制直接转换成为字符串(无需Unicode解码)
-     * @param hexStr
-     * @return
-     */
-    public static String hexStr2Str(String hexStr) {
-        String str = "0123456789ABCDEF";
-        char[] hexs = hexStr.toCharArray();
-        byte[] bytes = new byte[hexStr.length() / 2];
-        int n;
-        for (int i = 0; i < bytes.length; i++) {
-            n = str.indexOf(hexs[2 * i]) * 16;
-            n += str.indexOf(hexs[2 * i + 1]);
-            bytes[i] = (byte) (n & 0xff);
+    // 转化十六进制编码为字符串
+    public static String hexStr2Str(String s) {
+        s = s.replaceAll(" ","");
+        byte[] baKeyword = new byte[s.length() / 2];
+        for (int i = 0; i < baKeyword.length; i++) {
+            try {
+                baKeyword[i] = (byte) (0xff & Integer.parseInt(s.substring(
+                        i * 2, i * 2 + 2), 16));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
-        return new String(bytes);
+        try {
+            s = new String(baKeyword, "GBK");// UTF-16le:Not
+        } catch (Exception e1) {
+            e1.printStackTrace();
+        }
+        return s;
     }
+
 
     public static boolean isPad(Context context) {
         return (context.getResources().getConfiguration().screenLayout
@@ -79,10 +84,13 @@ public class MainActivity extends AppCompatActivity {
         ipadress_st=(EditText) findViewById(R.id.ipadress);
         ipcom_st=(EditText)findViewById(R.id.com);
         Data_show_st =(TextView) findViewById(R.id.rvdata);
+        Data_show_st.setMovementMethod(ScrollingMovementMethod.getInstance());
         Data_send_st =(EditText) findViewById(R.id.senddata);
 
         clear_receive_st=(Button)findViewById(R.id.reclear);
         converStr_st=(Button)findViewById(R.id.converStr);
+        converStr_st.setEnabled(false);
+
         getClear_send_st=(Button)findViewById(R.id.sendclear);
         send_st=(Button)findViewById(R.id.sendto);
 
@@ -98,7 +106,7 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    // 接受显示小车发送的数据
+    // 接受显示ESP8266发送的数据
     private Handler recvhandler = new Handler() {
         public void handleMessage(Message msg) {
 
@@ -106,9 +114,13 @@ public class MainActivity extends AppCompatActivity {
               // mByte = (byte[]) msg.obj;
                 String result = msg.getData().get("msg").toString();
                 //result+=" ";
-                Data_show_st.append(result);
-                //Data_show_st.append("\n");
+                //Data_show_st.append(result);
+                Data_show_st.append(hexStr2Str(result));
+                //
+
+                // TODO: 对接收的单条数据分割处理并显示到独立的TextView中
             }
+            //Data_show_st.append("\n");
         }
     };
 
@@ -120,14 +132,19 @@ public class MainActivity extends AppCompatActivity {
 
             switch(v.getId())
             {
-                case R.id.reclear:
+                case R.id.reclear:{
                     Data_show_st.setText(null);
+                    //converStr_st.setEnabled(true);
                     break;
+                }
                 case R.id.converStr:{
                     String str = Data_show_st.getText().toString();
-                    Toast.makeText(MainActivity.this,str.replaceAll(" ", "") , Toast.LENGTH_SHORT).show();
-                    Data_show_st.setText(hexStr2Str(str.replaceAll(" ", "")));
-                    break;}
+                    if (str==null||str.equals("")) {Toast.makeText(MainActivity.this,"null" , Toast.LENGTH_SHORT).show();break;}
+                    converStr_st.setEnabled(false);
+                    Toast.makeText(MainActivity.this,str , Toast.LENGTH_SHORT).show();
+                    Data_show_st.setText(hexStr2Str(str));
+                    break;
+                }
                 case R.id.sendclear:
                     Data_send_st.setText(null);
                     break;
@@ -143,14 +160,22 @@ public class MainActivity extends AppCompatActivity {
                              try {
                                  sock_con.connect(recvhandler, ipadress_st.getText().toString(), Integer.valueOf(ipcom_st.getText().toString(), 10));
 
-                                 connection_st.setText("已连接");
+                                 connection_st.setText("断开");
+                                 wificonnection=1;
+                                 //connection_st.setEnabled(false);
                              }catch (Exception e) {
-                                //Toast.makeText(MainActivity.this, "提示：连接失败", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(MainActivity.this, "连接失败", Toast.LENGTH_SHORT).show();
+                                 connection_st.setText("连接");
 
                              }
-
                          }
-                        }
+                         else {
+                             sock_con.destory();
+                             connection_st.setText("连接");
+                             wificonnection=0;
+                         }
+                         }
+
                     });
 
 
